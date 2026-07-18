@@ -11,11 +11,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN chmod +x start.sh
 
 # Порт задаётся платформой через переменную окружения PORT (Render/Railway)
 ENV PORT=8000
 EXPOSE 8000
 
-# Миграции применяются отдельным шагом при деплое (см. README), не в CMD,
-# чтобы избежать гонки при нескольких инстансах и дать контроль над откатами.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Миграции применяются автоматически при старте через start.sh — это
+# осознанный выбор для single-instance деплоя (бесплатный тариф Render без
+# Shell-доступа). См. комментарий в start.sh про риски при масштабировании
+# на несколько инстансов.
+CMD ["./start.sh"]
