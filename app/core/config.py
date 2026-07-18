@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
+from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
 
 
 class Settings(BaseSettings):
@@ -21,9 +22,25 @@ class Settings(BaseSettings):
         Без этой нормализации приложение падает на старте на проде.
         """
         if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
         if v.startswith("postgresql://") and "+asyncpg" not in v:
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        # Neon, Supabase и другие managed-провайдеры добавляют в connection
+        # string параметры sslmode/channel_binding — это формат libpq
+        # (psycopg2), а не asyncpg. asyncpg не распознаёт эти параметры и
+        # пытается отправить их на сервер как session-level настройки, из-за
+        # чего соединение падает без внятной ошибки на уровне приложения
+        # (health check просто вернёт db:false). SSL для Neon включаем
+        # отдельно через connect_args в database.py, а не через query string.
+        if "+asyncpg" in v:
+            parts = urlsplit(v)
+            query = parse_qs(parts.query)
+            query.pop("sslmode", None)
+            query.pop("channel_binding", None)
+            new_query = urlencode(query, doseq=True)
+            v = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+
         return v
 
     class Config:
