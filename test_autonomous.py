@@ -227,6 +227,7 @@ async def test_promise_full_lifecycle(client):
         "region_id": "spb", "official_name": "Тест Т.", "official_role": "Мэр",
         "promise_text": "Тестовое обещание для автономного теста номер один",
         "source_url": "https://example.com/1", "device_hash": "auto-test-1",
+    "accuracy_confirmed": True,
     })
     assert r.status_code == 201
     promise_id = r.json()["id"]
@@ -250,6 +251,7 @@ async def test_promise_duplicate_vote_409(client):
         "region_id": "spb", "official_name": "Тест", "official_role": "Глава",
         "promise_text": "Второе тестовое обещание для проверки повторного голоса",
         "source_url": "https://example.com/2", "device_hash": "auto-test-2",
+    "accuracy_confirmed": True,
     })
     promise_id = r.json()["id"]
 
@@ -278,6 +280,7 @@ async def test_promise_invalid_vote_value_422(client):
         "region_id": "spb", "official_name": "Тест", "official_role": "Депутат",
         "promise_text": "Третье обещание для проверки невалидного значения голоса",
         "source_url": "https://example.com/3", "device_hash": "auto-test-3",
+    "accuracy_confirmed": True,
     })
     promise_id = r.json()["id"]
     r2 = await client.post(f"/api/promises/{promise_id}/vote", json={
@@ -293,6 +296,7 @@ async def test_promise_short_text_rejected(client):
         "region_id": "spb", "official_name": "Тест", "official_role": "Мэр",
         "promise_text": "коротко",
         "source_url": "https://example.com/4", "device_hash": "auto-test-4",
+    "accuracy_confirmed": True,
     })
     assert r.status_code == 422
 
@@ -315,6 +319,7 @@ async def test_promise_limit_param(client):
             "promise_text": f"Обещание номер {i} для проверки лимита выдачи данных",
             "source_url": f"https://example.com/limit{i}",
             "device_hash": f"limit-fixture-{i}",
+            "accuracy_confirmed": True,
         })
         assert r.status_code == 201
 
@@ -380,6 +385,7 @@ async def test_promise_concurrent_votes_no_lost_updates(client):
         "promise_text": "Обещание для regression-теста на потерю обновлений",
         "source_url": "https://example.com/concurrency",
         "device_hash": "concurrency-creator",
+    "accuracy_confirmed": True,
     })
     promise_id = r.json()["id"]
 
@@ -410,6 +416,7 @@ async def test_promise_concurrent_duplicate_returns_clean_409(client):
         "promise_text": "Обещание для проверки конкурентных дублирующих голосов",
         "source_url": "https://example.com/dup",
         "device_hash": "dup-creator",
+    "accuracy_confirmed": True,
     })
     promise_id = r.json()["id"]
 
@@ -423,6 +430,61 @@ async def test_promise_concurrent_duplicate_returns_clean_409(client):
     assert statuses.count(200) == 1, f"Ожидали ровно 1 успех, получили {statuses.count(200)}"
     assert statuses.count(409) == 9, f"Ожидали 9 конфликтов, получили {statuses.count(409)}"
     assert 500 not in statuses, "IntegrityError протёк как 500 вместо чистого 409"
+
+
+@pytest.mark.asyncio
+async def test_promise_requires_accuracy_confirmation(client):
+    """Без accuracy_confirmed=true запись не создаётся — защита от недостоверных обещаний."""
+    r = await client.post("/api/promises", json={
+        "region_id": "dispute-test", "official_name": "Тест", "official_role": "Мэр",
+        "promise_text": "Обещание без подтверждения достоверности информации",
+        "source_url": "https://example.com/nc", "device_hash": "nc-1",
+        "accuracy_confirmed": False,
+    })
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_promise_dispute_auto_hides_after_threshold(client):
+    """3 жалобы на недостоверность автоматически скрывают запись из публичного списка."""
+    r = await client.post("/api/promises", json={
+        "region_id": "dispute-test", "official_name": "Тест", "official_role": "Мэр",
+        "promise_text": "Обещание для проверки механизма жалоб на недостоверность",
+        "source_url": "https://example.com/dispute", "device_hash": "dispute-creator",
+        "accuracy_confirmed": True,
+    })
+    promise_id = r.json()["id"]
+
+    for h in ["d1", "d2", "d3"]:
+        r = await client.post(f"/api/promises/{promise_id}/dispute", json={
+            "reason": "fabricated", "disputer_hash": h,
+        })
+        assert r.status_code == 204
+
+    listing = await client.get("/api/promises?region_id=dispute-test")
+    ids = [p["id"] for p in listing.json()]
+    assert promise_id not in ids, "Запись должна быть скрыта после 3 жалоб"
+
+
+@pytest.mark.asyncio
+async def test_promise_dispute_duplicate_returns_409(client):
+    r = await client.post("/api/promises", json={
+        "region_id": "dispute-test-2", "official_name": "Тест", "official_role": "Депутат",
+        "promise_text": "Второе обещание для проверки повторной жалобы",
+        "source_url": "https://example.com/dispute2", "device_hash": "dispute-creator-2",
+        "accuracy_confirmed": True,
+    })
+    promise_id = r.json()["id"]
+
+    r1 = await client.post(f"/api/promises/{promise_id}/dispute", json={
+        "reason": "not_in_source", "disputer_hash": "same-disputer",
+    })
+    assert r1.status_code == 204
+
+    r2 = await client.post(f"/api/promises/{promise_id}/dispute", json={
+        "reason": "other", "disputer_hash": "same-disputer",
+    })
+    assert r2.status_code == 409
 
 
 @pytest.mark.asyncio

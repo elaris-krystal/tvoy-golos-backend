@@ -5,11 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models.models import RegionNormative, UserSession, ResponseLibrary, ClassificationLog, Promise, PromiseVote
+from app.models.models import RegionNormative, UserSession, ResponseLibrary, ClassificationLog, Promise, PromiseVote, PromiseDispute
 from app.schemas.schemas import (
     BenefitOut, GenerateTemplateIn, GenerateTemplateOut,
     ClassifyIn, ClassifyOut, SessionIn, FeedbackIn,
-    PromiseCreateIn, PromiseOut, PromiseVoteIn, RegionStatsOut,
+    PromiseCreateIn, PromiseOut, PromiseVoteIn, PromiseDisputeIn, RegionStatsOut,
 )
 from app.services.generator import generate_template
 from app.services.classifier import classify_response, hash_text
@@ -176,7 +176,20 @@ async def create_promise(
     data: PromiseCreateIn,
     db: AsyncSession = Depends(get_db),
 ):
-    """Добавление обещания чиновника пользователем. Верификация — краудсорсингом."""
+    """
+    Добавление обещания чиновника пользователем. Верификация — краудсорсингом.
+
+    Требует явного accuracy_confirmed=true — платформа публично приписывает
+    слова конкретному названному человеку, и без зафиксированного
+    подтверждения пользователя запись не создаётся (защита от клеветы,
+    ст. 152 ГК РФ). Аналог consent-экранов в Модулях 1/2.
+    """
+    if not data.accuracy_confirmed:
+        raise HTTPException(
+            status_code=422,
+            detail="Необходимо подтвердить достоверность информации перед публикацией",
+        )
+
     promise = Promise(
         region_id=data.region_id,
         official_name=data.official_name,
@@ -187,6 +200,8 @@ async def create_promise(
         status="checking",
         votes_fulfilled=0,
         votes_broken=0,
+        dispute_count=0,
+        hidden=False,
         submitter_hash=data.device_hash,
         created_at=datetime.utcnow(),
     )
@@ -205,6 +220,7 @@ async def create_promise(
         status=promise.status,
         votes_fulfilled=promise.votes_fulfilled,
         votes_broken=promise.votes_broken,
+        dispute_count=promise.dispute_count,
         created_at=promise.created_at.isoformat(),
     )
 
@@ -216,8 +232,11 @@ async def list_promises(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    """Список обещаний по региону, новые сверху."""
-    query = select(Promise).where(Promise.region_id == region_id)
+    """Список обещаний по региону, новые сверху. Скрытые (по жалобам) не показываются."""
+    query = select(Promise).where(
+        Promise.region_id == region_id,
+        Promise.hidden == False,  # noqa: E712
+    )
     if status_filter:
         query = query.where(Promise.status == status_filter)
     query = query.order_by(Promise.created_at.desc()).limit(limit)
@@ -230,7 +249,8 @@ async def list_promises(
             official_role=p.official_role, promise_text=p.promise_text,
             source_url=p.source_url, promise_date=p.promise_date,
             status=p.status, votes_fulfilled=p.votes_fulfilled,
-            votes_broken=p.votes_broken, created_at=p.created_at.isoformat(),
+            votes_broken=p.votes_broken, dispute_count=p.dispute_count,
+            created_at=p.created_at.isoformat(),
         )
         for p in rows
     ]
@@ -238,6 +258,11 @@ async def list_promises(
 
 # Порог голосов для автоматического пересчёта статуса
 VOTE_THRESHOLD = 3
+
+# Порог жалоб на недостоверность — после этого запись скрывается из публичного
+# списка до ручной проверки. Не удаляется — только скрывается, чтобы не терять
+# данные при ложных жалобах и оставить возможность разбора.
+DISPUTE_THRESHOLD = 3
 
 
 @router.post("/promises/{promise_id}/vote", response_model=PromiseOut)
@@ -304,8 +329,53 @@ async def vote_promise(
         official_role=promise.official_role, promise_text=promise.promise_text,
         source_url=promise.source_url, promise_date=promise.promise_date,
         status=promise.status, votes_fulfilled=promise.votes_fulfilled,
-        votes_broken=promise.votes_broken, created_at=promise.created_at.isoformat(),
+        votes_broken=promise.votes_broken, dispute_count=promise.dispute_count,
+        created_at=promise.created_at.isoformat(),
     )
+
+
+@router.post("/promises/{promise_id}/dispute", status_code=204)
+async def dispute_promise(
+    promise_id: int,
+    data: PromiseDisputeIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Жалоба на недостоверность обещания (не то же самое, что голос
+    "выполнено/не выполнено"). При достижении порога запись автоматически
+    скрывается из публичного списка до ручной проверки. Один голос на
+    устройство на обещание — та же защита от накрутки, что и у обычных
+    голосов, через UNIQUE-индекс и перехват IntegrityError.
+    """
+    promise = await db.get(Promise, promise_id)
+    if not promise:
+        raise HTTPException(status_code=404, detail="Обещание не найдено")
+
+    try:
+        db.add(PromiseDispute(
+            promise_id=promise_id,
+            disputer_hash=data.disputer_hash,
+            reason=data.reason,
+            created_at=datetime.utcnow(),
+        ))
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Вы уже отправляли жалобу на эту запись")
+
+    await db.execute(
+        update(Promise)
+        .where(Promise.id == promise_id)
+        .values(dispute_count=Promise.dispute_count + 1)
+    )
+    await db.commit()
+    await db.refresh(promise)
+
+    if promise.dispute_count >= DISPUTE_THRESHOLD and not promise.hidden:
+        await db.execute(
+            update(Promise).where(Promise.id == promise_id).values(hidden=True)
+        )
+        await db.commit()
 
 
 @router.get("/promises/stats", response_model=RegionStatsOut)

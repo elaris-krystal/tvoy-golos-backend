@@ -107,7 +107,28 @@ class Promise(Base):
     status: Mapped[str] = mapped_column(String(20), default="checking")       # checking|fulfilled|broken
     votes_fulfilled: Mapped[int] = mapped_column(Integer, default=0)
     votes_broken: Mapped[int] = mapped_column(Integer, default=0)
+    # Жалобы на недостоверность — отдельно от голосования "выполнено/не выполнено".
+    # Ссылка может быть верна и обещание реально было, но текст мог быть искажён,
+    # либо ссылка вообще не подтверждает заявленное. Это защита от клеветы
+    # (ст. 152 ГК РФ) — платформа не может публиковать непроверенные утверждения
+    # о конкретных названных людях без механизма оспаривания.
+    dispute_count: Mapped[int] = mapped_column(Integer, default=0)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False)              # скрыто после порога жалоб, до ручной проверки
     submitter_hash: Mapped[str] = mapped_column(String(64), nullable=False)   # анонимный хэш добавившего
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PromiseDispute(Base):
+    """Жалоба на недостоверность обещания. Один голос на устройство на обещание."""
+    __tablename__ = "promise_disputes"
+    __table_args__ = (
+        Index("ix_pd_promise_disputer", "promise_id", "disputer_hash", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    promise_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    disputer_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(String(50), nullable=False)  # not_in_source|fabricated|other
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
