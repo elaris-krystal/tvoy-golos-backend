@@ -22,6 +22,7 @@ async def test_concurrent_votes_race_condition():
             "promise_text": "Обещание для проверки конкурентного голосования race condition",
             "source_url": "https://example.com/stress1",
             "device_hash": "stress-creator",
+            "accuracy_confirmed": True,
         })
         promise_id = r.json()["id"]
 
@@ -67,6 +68,7 @@ async def test_concurrent_duplicate_vote_same_voter():
             "promise_text": "Обещание для проверки конкурентных дублирующихся голосов",
             "source_url": "https://example.com/stress2",
             "device_hash": "stress-creator-2",
+            "accuracy_confirmed": True,
         })
         promise_id = r.json()["id"]
 
