@@ -89,58 +89,15 @@ class ClassificationLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class Promise(Base):
-    """Модуль 3 v0.1: обещание чиновника, добавленное пользователем (краудсорсинг)."""
-    __tablename__ = "promises"
+class DevFeedback(Base):
+    """Анонимная обратная связь с разработчиками. Никакой привязки к пользователю."""
+    __tablename__ = "dev_feedback"
     __table_args__ = (
-        Index("ix_pr_region_status", "region_id", "status"),
-        Index("ix_pr_created_at", "created_at"),
+        Index("ix_df_created_at", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    region_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    official_name: Mapped[str] = mapped_column(String(200), nullable=False)   # без должности как персональных данных — публичная роль
-    official_role: Mapped[str] = mapped_column(String(200), nullable=False)   # напр. "Глава района", "Мэр"
-    promise_text: Mapped[str] = mapped_column(Text, nullable=False)
-    source_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    promise_date: Mapped[str] = mapped_column(String(20), nullable=True)      # ISO date как строка, дата заявления
-    status: Mapped[str] = mapped_column(String(20), default="checking")       # checking|fulfilled|broken
-    votes_fulfilled: Mapped[int] = mapped_column(Integer, default=0)
-    votes_broken: Mapped[int] = mapped_column(Integer, default=0)
-    # Жалобы на недостоверность — отдельно от голосования "выполнено/не выполнено".
-    # Ссылка может быть верна и обещание реально было, но текст мог быть искажён,
-    # либо ссылка вообще не подтверждает заявленное. Это защита от клеветы
-    # (ст. 152 ГК РФ) — платформа не может публиковать непроверенные утверждения
-    # о конкретных названных людях без механизма оспаривания.
-    dispute_count: Mapped[int] = mapped_column(Integer, default=0)
-    hidden: Mapped[bool] = mapped_column(Boolean, default=False)              # скрыто после порога жалоб, до ручной проверки
-    submitter_hash: Mapped[str] = mapped_column(String(64), nullable=False)   # анонимный хэш добавившего
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class PromiseDispute(Base):
-    """Жалоба на недостоверность обещания. Один голос на устройство на обещание."""
-    __tablename__ = "promise_disputes"
-    __table_args__ = (
-        Index("ix_pd_promise_disputer", "promise_id", "disputer_hash", unique=True),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    promise_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    disputer_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    reason: Mapped[str] = mapped_column(String(50), nullable=False)  # not_in_source|fabricated|other
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class PromiseVote(Base):
-    """Голос за верификацию обещания. Ограничение: один голос на устройство на обещание."""
-    __tablename__ = "promise_votes"
-    __table_args__ = (
-        Index("ix_pv_promise_voter", "promise_id", "voter_hash", unique=True),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    promise_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    voter_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    vote: Mapped[str] = mapped_column(String(20), nullable=False)  # fulfilled|broken
+    category: Mapped[str] = mapped_column(String(20), nullable=False)  # bug|suggestion|other
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    page: Mapped[str] = mapped_column(String(200), nullable=True)  # с какого экрана отправлено
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
