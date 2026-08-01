@@ -26,6 +26,14 @@ class GenerateTemplateOut(BaseModel):
     edit_pct_baseline: float = 0.0
 
 
+class GenerateDocumentIn(BaseModel):
+    region_id: str
+    region_name: str
+    category: str
+    subcategory: str
+    reason_text: str
+
+
 class ClassifyIn(BaseModel):
     original_request: str
     official_response: str

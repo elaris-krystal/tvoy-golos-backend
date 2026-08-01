@@ -9,9 +9,12 @@ from app.models.models import RegionNormative, UserSession, ResponseLibrary, Cla
 from app.schemas.schemas import (
     BenefitOut, GenerateTemplateIn, GenerateTemplateOut,
     ClassifyIn, ClassifyOut, SessionIn, FeedbackIn, DevFeedbackIn,
+    GenerateDocumentIn,
 )
 from app.services.generator import generate_template
 from app.services.classifier import classify_response, hash_text
+from app.services.document_filler import generate_document, is_document_supported
+from fastapi.responses import Response
 
 router = APIRouter()
 
@@ -72,6 +75,31 @@ async def api_generate_template(data: GenerateTemplateIn):
         return await generate_template(data)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Ошибка генерации шаблона: {str(e)}")
+
+
+@router.get("/document-available")
+async def api_document_available(category: str, subcategory: str):
+    return {"available": is_document_supported(category, subcategory)}
+
+
+@router.post("/generate-document")
+async def api_generate_document(data: GenerateDocumentIn):
+    if not is_document_supported(data.category, data.subcategory):
+        raise HTTPException(
+            status_code=404,
+            detail="Официальный бланк для этой категории пока не реализован",
+        )
+    try:
+        content = generate_document(data.category, data.subcategory, data.region_name, data.reason_text)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Ошибка генерации документа: {str(e)}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=zayavlenie_pension_pereraschet.docx"},
+    )
 
 
 @router.post("/classify-response", response_model=ClassifyOut)
