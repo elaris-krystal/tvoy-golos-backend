@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.limiter import limiter
+from app.core.config import settings
 from app.models.models import RegionNormative, UserSession, ResponseLibrary, ClassificationLog, DevFeedback
 from app.schemas.schemas import (
     BenefitOut, GenerateTemplateIn, GenerateTemplateOut,
@@ -17,6 +19,15 @@ from app.services.document_filler import generate_document, is_document_supporte
 from fastapi.responses import Response
 
 router = APIRouter()
+
+
+def _rate_limit_exempt() -> bool:
+    """
+    Rate limiting активен только в проде. В dev/CI (в т.ч. stress_test.py,
+    который намеренно шлёт 50 параллельных запросов с одного IP) лимиты
+    отключены, чтобы не мешать разработке и нагрузочному тестированию.
+    """
+    return settings.env != "production"
 
 
 @router.get("/health")
@@ -70,7 +81,8 @@ async def get_benefits(
 
 
 @router.post("/generate-template", response_model=GenerateTemplateOut)
-async def api_generate_template(data: GenerateTemplateIn):
+@limiter.limit("20/minute", exempt_when=_rate_limit_exempt)
+async def api_generate_template(request: Request, data: GenerateTemplateIn):
     try:
         return await generate_template(data)
     except Exception as e:
@@ -83,7 +95,8 @@ async def api_document_available(category: str, subcategory: str):
 
 
 @router.post("/generate-document")
-async def api_generate_document(data: GenerateDocumentIn):
+@limiter.limit("10/minute", exempt_when=_rate_limit_exempt)
+async def api_generate_document(request: Request, data: GenerateDocumentIn):
     if not is_document_supported(data.category, data.subcategory):
         raise HTTPException(
             status_code=404,
@@ -103,7 +116,9 @@ async def api_generate_document(data: GenerateDocumentIn):
 
 
 @router.post("/classify-response", response_model=ClassifyOut)
+@limiter.limit("20/minute", exempt_when=_rate_limit_exempt)
 async def api_classify_response(
+    request: Request,
     data: ClassifyIn,
     db: AsyncSession = Depends(get_db),
 ):
@@ -128,11 +143,10 @@ async def api_classify_response(
         created_at=datetime.utcnow(),
     ))
 
-    # Сохраняем ответ в библиотеку (обезличенно)
+    # Сохраняем классификацию (без сырого текста ответа — см. ResponseLibrary docstring)
     if data.region_id and data.category:
         db.add(ResponseLibrary(
             original_request_hash=hash_text(data.original_request),
-            response_text=data.official_response,
             region_id=data.region_id,
             category=data.category,
             subcategory=data.subcategory or "unknown",
@@ -166,7 +180,9 @@ async def log_session(
 
 
 @router.post("/feedback", status_code=204)
+@limiter.limit("15/minute", exempt_when=_rate_limit_exempt)
 async def submit_feedback(
+    request: Request,
     data: FeedbackIn,
     db: AsyncSession = Depends(get_db),
 ):
@@ -182,7 +198,6 @@ async def submit_feedback(
     else:
         db.add(ResponseLibrary(
             original_request_hash=request_hash,
-            response_text=data.response_text,
             region_id=data.region_id,
             category=data.category,
             subcategory=data.subcategory,
@@ -199,7 +214,9 @@ async def submit_feedback(
 # ── Обратная связь с разработчиками ─────────────────────────────────────────
 
 @router.post("/dev-feedback", status_code=204)
+@limiter.limit("10/minute", exempt_when=_rate_limit_exempt)
 async def submit_dev_feedback(
+    request: Request,
     data: DevFeedbackIn,
     db: AsyncSession = Depends(get_db),
 ):

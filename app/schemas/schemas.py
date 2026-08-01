@@ -66,7 +66,6 @@ class SessionIn(BaseModel):
 
 
 class FeedbackIn(BaseModel):
-    response_text: str
     original_request: str
     region_id: str
     category: str

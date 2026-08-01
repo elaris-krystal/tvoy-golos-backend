@@ -52,7 +52,16 @@ class UserSession(Base):
 
 
 class ResponseLibrary(Base):
-    """Обезличенная библиотека ответов. Нет foreign key на user_sessions."""
+    """
+    Обезличенная библиотека классификаций ответов.
+
+    ВАЖНО: с миграции 0006 сюда НЕ сохраняется сырой текст ответа чиновника
+    (ранее — response_text). Хранение полного текста официальных писем создавало
+    риск обработки персональных данных третьих лиц (ФИО/должность подписавшего,
+    иногда данные самого пользователя) без правового основания по 152-ФЗ.
+    Для анализа паттернов достаточно классификации, категории и хэша исходного
+    запроса — сам текст ответа не нужен и не хранится.
+    """
     __tablename__ = "responses_library"
     __table_args__ = (
         Index("ix_rl_region_category", "region_id", "category"),
@@ -61,7 +70,6 @@ class ResponseLibrary(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     original_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    response_text: Mapped[str] = mapped_column(Text, nullable=False)
     region_id: Mapped[str] = mapped_column(String(20), nullable=False)
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     subcategory: Mapped[str] = mapped_column(String(50), nullable=False)

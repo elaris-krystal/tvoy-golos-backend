@@ -217,7 +217,6 @@ async def test_session_log(client):
 @pytest.mark.asyncio
 async def test_feedback(client):
     r = await client.post("/api/feedback", json={
-        "response_text": "текст ответа для фидбэка",
         "original_request": "текст запроса для фидбэка",
         "region_id": "msk", "category": "family", "subcategory": "large_family",
         "system_label": "отписка", "user_label": "отписка",

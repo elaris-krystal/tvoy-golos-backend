@@ -3,8 +3,11 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.api.router import router
 
 logger = logging.getLogger("tvoy-golos")
@@ -16,6 +19,9 @@ app = FastAPI(
     docs_url="/docs" if settings.env == "development" else None,
     redoc_url=None,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — только разрешённые origins, без credentials
 app.add_middleware(
