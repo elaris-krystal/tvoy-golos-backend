@@ -13,6 +13,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN chmod +x start.sh
 
+# Не запускаем приложение от root внутри контейнера (defense-in-depth: если
+# когда-либо найдётся RCE-уязвимость в зависимости, root внутри контейнера
+# даёт атакующему больше возможностей, чем непривилегированный пользователь).
+# Порт 8000 не требует root (root нужен только для портов <1024).
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Порт задаётся платформой через переменную окружения PORT (Render/Railway)
 ENV PORT=8000
 EXPOSE 8000
