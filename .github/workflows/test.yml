@@ -54,3 +54,31 @@ jobs:
         env:
           DATABASE_URL: sqlite+aiosqlite:///./ci_stress.db
           LLM_PROVIDER: none
+
+  docker-build:
+    # Отдельная job: раньше CI вообще не собирал Dockerfile — тесты выше
+    # гоняются напрямую на раннере, минуя Docker. Это значит, что любая
+    # ошибка именно в Dockerfile (например, при добавлении non-root
+    # пользователя) всплыла бы только на живом деплое Render, а не в CI.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t tvoy-golos-api:ci .
+
+      - name: Smoke test — контейнер реально стартует и отвечает на /api/health
+        run: |
+          docker run -d --name smoke-test -p 8000:8000 \
+            -e DATABASE_URL=sqlite+aiosqlite:///./smoke.db \
+            -e LLM_PROVIDER=none \
+            -e FRONTEND_ORIGIN=http://localhost:5173 \
+            -e ENV=development \
+            tvoy-golos-api:ci
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8000/api/health && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/api/health || (docker logs smoke-test && exit 1)
+          docker logs smoke-test
+          docker stop smoke-test
