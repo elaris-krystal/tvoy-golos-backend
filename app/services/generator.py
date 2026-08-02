@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 from fastapi import HTTPException
 
 from app.core.config import settings
+from app.data.region_declension import to_locative
 from app.schemas.schemas import GenerateTemplateIn, GenerateTemplateOut
 from app.services.llm import llm_complete
 
@@ -288,7 +289,9 @@ def _static_template(data: GenerateTemplateIn) -> str:
     # Для категории 'labor' шаблоны различаются по подкатегории (нет общего для всей категории)
     combined_key = f"{data.category}_{data.subcategory}"
     tpl = STATIC_TEMPLATES.get(combined_key) or STATIC_TEMPLATES.get(data.category) or STATIC_TEMPLATES["default"]
-    return tpl.format(region_name=data.region_name)
+    # Склоняем в предложный падеж ("в Москве", а не "в Москва") — все 25
+    # вхождений {region_name} в шаблонах используются именно в конструкции "в ...".
+    return tpl.format(region_name=to_locative(data.region_name))
 
 
 def _calc_diff_pct(original: str, modified: str) -> float:

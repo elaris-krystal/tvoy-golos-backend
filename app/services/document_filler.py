@@ -19,6 +19,8 @@ from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+from app.data.region_declension import to_dative
+
 # Ключи (категория, подкатегория), для которых уже реализовано заполнение бланка.
 SUPPORTED_DOCUMENTS = {
     ("pension", "pension_recalculation"): "pension_recalculation_form",
@@ -58,7 +60,7 @@ def generate_pension_recalculation_form(region_name: str, reason_text: str) -> b
     # Наименование территориального органа — единственное автозаполненное поле шапки
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(f"В Отделение Фонда пенсионного и социального страхования\nРоссийской Федерации по {region_name}")
+    run = p.add_run(f"В Отделение Фонда пенсионного и социального страхования\nРоссийской Федерации по {to_dative(region_name)}")
     run.italic = True
     run.font.size = Pt(11)
 
