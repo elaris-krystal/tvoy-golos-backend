@@ -27,7 +27,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        settings.frontend_origin,
+        *settings.frontend_origins_list,
         "http://127.0.0.1:5173",
         "http://localhost:5173",
     ],

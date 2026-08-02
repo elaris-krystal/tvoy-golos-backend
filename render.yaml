@@ -14,7 +14,7 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: FRONTEND_ORIGIN
-        value: https://tvoy-golos.vercel.app
+        value: https://tvoy-golos-frontend.elariskristal.workers.dev
       - key: ENV
         value: production
       - key: LLM_TIMEOUT_SEC

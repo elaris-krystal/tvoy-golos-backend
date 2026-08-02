@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     env: str = "development"
 
+    @property
+    def frontend_origins_list(self) -> list[str]:
+        """
+        FRONTEND_ORIGIN может содержать несколько адресов через запятую
+        (например, стандартный *.workers.dev и подключённый позже свой домен
+        одновременно) — без этого любая смена/добавление домена фронтенда
+        молча ломает CORS для одного из адресов.
+        """
+        return [origin.strip() for origin in self.frontend_origin.split(",") if origin.strip()]
+
     @field_validator("database_url")
     @classmethod
     def normalize_database_url(cls, v: str) -> str:
