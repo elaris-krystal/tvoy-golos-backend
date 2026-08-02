@@ -36,20 +36,6 @@ class Template(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class UserSession(Base):
-    __tablename__ = "user_sessions"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    device_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    region_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    category: Mapped[str] = mapped_column(String(50), nullable=False)
-    subcategory: Mapped[str] = mapped_column(String(50), nullable=False)
-    template_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    edit_pct: Mapped[float] = mapped_column(Float, default=0.0)
-    consent_given: Mapped[bool] = mapped_column(Boolean, default=False)
-    id_level: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
 
 class ResponseLibrary(Base):
     """

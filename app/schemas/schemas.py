@@ -55,16 +55,6 @@ class ClassifyOut(BaseModel):
     used_llm: bool = False
 
 
-class SessionIn(BaseModel):
-    device_hash: str = Field(..., max_length=64)
-    region_id: str
-    category: str
-    subcategory: str
-    template_version: Optional[str] = None
-    edit_pct: float = 0.0
-    consent_given: bool = False
-
-
 class FeedbackIn(BaseModel):
     original_request: str
     region_id: str

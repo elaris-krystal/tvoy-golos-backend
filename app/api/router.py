@@ -7,10 +7,10 @@ from datetime import datetime
 from app.core.database import get_db
 from app.core.limiter import limiter
 from app.core.config import settings
-from app.models.models import RegionNormative, UserSession, ResponseLibrary, ClassificationLog, DevFeedback
+from app.models.models import RegionNormative, ResponseLibrary, ClassificationLog, DevFeedback
 from app.schemas.schemas import (
     BenefitOut, GenerateTemplateIn, GenerateTemplateOut,
-    ClassifyIn, ClassifyOut, SessionIn, FeedbackIn, DevFeedbackIn,
+    ClassifyIn, ClassifyOut, FeedbackIn, DevFeedbackIn,
     GenerateDocumentIn,
 )
 from app.services.generator import generate_template
@@ -157,26 +157,6 @@ async def api_classify_response(
 
     await db.commit()
     return result
-
-
-@router.post("/session", status_code=204)
-async def log_session(
-    data: SessionIn,
-    db: AsyncSession = Depends(get_db),
-):
-    """Логирует анонимную сессию. Никаких персональных данных."""
-    db.add(UserSession(
-        device_hash=data.device_hash,
-        region_id=data.region_id,
-        category=data.category,
-        subcategory=data.subcategory,
-        template_version=data.template_version,
-        edit_pct=data.edit_pct,
-        consent_given=data.consent_given,
-        id_level=0,
-        created_at=datetime.utcnow(),
-    ))
-    await db.commit()
 
 
 @router.post("/feedback", status_code=204)

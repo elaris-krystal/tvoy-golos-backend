@@ -202,17 +202,6 @@ async def test_classify_very_long_response(client):
     assert r.status_code == 200
 
 
-# ── Promises (Модуль 3) ──────────────────────────────────────────────────
-@pytest.mark.asyncio
-async def test_session_log(client):
-    r = await client.post("/api/session", json={
-        "device_hash": "session-test", "region_id": "msk",
-        "category": "family", "subcategory": "large_family",
-        "edit_pct": 25.5, "consent_given": True,
-    })
-    assert r.status_code == 204
-
-
 # ── Feedback ──────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_feedback(client):
