@@ -37,7 +37,7 @@ async def health(db: AsyncSession = Depends(get_db)):
         db_ok = True
     except Exception:
         db_ok = False
-    return {"status": "ok", "db": db_ok, "version": "1.0", "llm_provider": "see .env"}
+    return {"status": "ok", "db": db_ok, "version": "1.0", "llm_provider": settings.llm_provider}
 
 
 @router.get("/benefits", response_model=list[BenefitOut])
