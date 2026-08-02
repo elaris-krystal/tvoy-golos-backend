@@ -1,9 +1,11 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/tvoy_golos"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
@@ -52,9 +54,6 @@ class Settings(BaseSettings):
             v = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 
         return v
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()
