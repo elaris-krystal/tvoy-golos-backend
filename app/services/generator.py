@@ -286,7 +286,10 @@ STATIC_TEMPLATES: dict[str, str] = {
 
 
 def _static_template(data: GenerateTemplateIn) -> str:
-    # Для категории 'labor' шаблоны различаются по подкатегории (нет общего для всей категории)
+    # Комбинированный ключ "категория_подкатегория" — для категорий, где текст
+    # зависит от конкретной подкатегории (labor, utilities, construction,
+    # ecology, consumer, а также отдельные подкатегории health/pension).
+    # Остальные категории используют общий шаблон на всю категорию (data.category).
     combined_key = f"{data.category}_{data.subcategory}"
     tpl = STATIC_TEMPLATES.get(combined_key) or STATIC_TEMPLATES.get(data.category) or STATIC_TEMPLATES["default"]
     # Склоняем в предложный падеж ("в Москве", а не "в Москва") — все 25
