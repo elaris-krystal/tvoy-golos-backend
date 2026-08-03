@@ -94,4 +94,5 @@ class DevFeedback(Base):
     category: Mapped[str] = mapped_column(String(20), nullable=False)  # bug|suggestion|other
     message: Mapped[str] = mapped_column(Text, nullable=False)
     page: Mapped[str] = mapped_column(String(200), nullable=True)  # с какого экрана отправлено
+    reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

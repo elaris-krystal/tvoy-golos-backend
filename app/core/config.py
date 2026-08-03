@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     uniqualize_min_pct: int = 40
     frontend_origin: str = "http://localhost:5173"
     env: str = "development"
+    admin_api_key: str = ""  # секрет для GET /api/admin/* — пусто = эндпоинты отключены
 
     @property
     def frontend_origins_list(self) -> list[str]:

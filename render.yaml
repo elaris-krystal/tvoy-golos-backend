@@ -13,6 +13,8 @@ services:
         value: anthropic
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: ADMIN_API_KEY
+        sync: false
       - key: FRONTEND_ORIGIN
         value: https://tvoy-golos-frontend.elariskristal.workers.dev
       - key: ENV

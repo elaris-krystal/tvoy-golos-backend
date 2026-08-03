@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -217,4 +217,62 @@ async def submit_dev_feedback(
         page=data.page,
         created_at=datetime.utcnow(),
     ))
+    await db.commit()
+
+
+# ── Админ-доступ к фидбэку (для регулярной сверки с "кредо" проекта) ────────
+# Простая защита общим секретом, а не полноценная авторизация — этого
+# достаточно для единственного пользователя (создателя проекта) и его
+# ассистента, без необходимости городить систему логинов/ролей ради одной
+# таблицы. Если ADMIN_API_KEY не задан в окружении — эндпоинты недоступны
+# (503), а не открыты по умолчанию.
+
+def _check_admin_key(x_admin_key: str | None):
+    if not settings.admin_api_key:
+        raise HTTPException(status_code=503, detail="Админ-доступ не настроен")
+    if x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=403, detail="Неверный ключ")
+
+
+@router.get("/admin/dev-feedback")
+@limiter.limit("20/minute", exempt_when=_rate_limit_exempt)
+async def admin_list_dev_feedback(
+    request: Request,
+    x_admin_key: str | None = Header(default=None),
+    only_unreviewed: bool = True,
+    db: AsyncSession = Depends(get_db),
+):
+    _check_admin_key(x_admin_key)
+    stmt = select(DevFeedback).order_by(DevFeedback.created_at.desc())
+    if only_unreviewed:
+        stmt = stmt.where(DevFeedback.reviewed == False)  # noqa: E712
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "category": r.category,
+            "message": r.message,
+            "page": r.page,
+            "reviewed": r.reviewed,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+@router.post("/admin/dev-feedback/{feedback_id}/mark-reviewed", status_code=204)
+@limiter.limit("20/minute", exempt_when=_rate_limit_exempt)
+async def admin_mark_reviewed(
+    request: Request,
+    feedback_id: int,
+    x_admin_key: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    _check_admin_key(x_admin_key)
+    result = await db.execute(select(DevFeedback).where(DevFeedback.id == feedback_id))
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    row.reviewed = True
     await db.commit()
