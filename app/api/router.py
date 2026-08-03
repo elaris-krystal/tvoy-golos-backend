@@ -108,10 +108,17 @@ async def api_generate_document(request: Request, data: GenerateDocumentIn):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Ошибка генерации документа: {str(e)}")
+    filenames = {
+        ("pension", "pension_recalculation"): "zayavlenie_pension_pereraschet.docx",
+        ("pension", "pension_underpayment"): "zayavlenie_pension_pereraschet.docx",
+        ("health", "disability"): "zayavlenie_edv.docx",
+        ("health", "veteran"): "zayavlenie_edv.docx",
+    }
+    filename = filenames.get((data.category, data.subcategory), "zayavlenie.docx")
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": "attachment; filename=zayavlenie_pension_pereraschet.docx"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
