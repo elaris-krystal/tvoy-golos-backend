@@ -1,0 +1,43 @@
+name: Fetch Dev Feedback
+
+# Запускается вручную (через API GitHub Actions или кнопку "Run workflow" в
+# интерфейсе) — забирает содержимое таблицы dev_feedback через защищённый
+# админ-эндпоинт продового бэкенда и коммитит результат в feedback/latest.json.
+# См. feedback/README.md — зачем это нужно.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch feedback from production API
+        env:
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: |
+          set -e
+          if [ -z "$ADMIN_API_KEY" ]; then
+            echo "::error::Секрет ADMIN_API_KEY не задан в настройках репозитория (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          curl -sf "https://tvoy-golos-backend.onrender.com/api/admin/dev-feedback?only_unreviewed=false" \
+            -H "x-admin-key: $ADMIN_API_KEY" \
+            -o feedback/latest.json
+          echo "Получено записей: $(python3 -c "import json; print(len(json.load(open('feedback/latest.json'))))")"
+
+      - name: Commit and push if changed
+        run: |
+          git config user.email "feedback-bot@tvoy-golos.local"
+          git config user.name "Tvoy Golos Feedback Bot"
+          git add feedback/latest.json
+          if git diff --staged --quiet; then
+            echo "Изменений нет — фидбэк с прошлого запуска не менялся."
+          else
+            git commit -m "Update feedback export [automated]"
+            git push
+          fi
