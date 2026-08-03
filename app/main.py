@@ -34,6 +34,10 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    # Content-Disposition не входит в safelist заголовков CORS по умолчанию —
+    # без явного expose_headers JS на фронтенде не может прочитать имя файла
+    # из ответа /generate-document, даже при успешном запросе.
+    expose_headers=["Content-Disposition"],
 )
 
 
