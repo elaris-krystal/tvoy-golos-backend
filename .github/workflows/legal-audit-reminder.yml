@@ -1,0 +1,38 @@
+name: Legal Citations Audit Reminder
+
+# Раз в квартал (1 января/апреля/июля/октября) создаёт Issue-напоминание —
+# сам workflow не умеет проверять законы (для этого нужен живой веб-поиск,
+# которого нет у обычного GitHub Actions раннера), но он даёт надёжный,
+# не зависящий от памяти триггер: следующий раз, когда ассистент откроет
+# репозиторий, он увидит открытый Issue и пройдёт ревизию по
+# legal_citations_audit.json — так же, как проводилась первая ревизия.
+on:
+  schedule:
+    - cron: '0 6 1 1,4,7,10 *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  create-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create audit reminder issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const audit = JSON.parse(fs.readFileSync('legal_citations_audit.json', 'utf8'));
+            const rows = audit.citations
+              .map(c => `- **${c.law}** (${c.used_in}) — последняя проверка: ${c.last_verified}`)
+              .join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Квартальная ревизия правовых цитат — ${new Date().toISOString().slice(0,10)}`,
+              body: `Пора проверить актуальность правовых цитат через живой веб-поиск.\n\nТекущий реестр (\`legal_citations_audit.json\`):\n\n${rows}\n\nПосле проверки — обновить \`last_verified\` для каждой проверенной записи и закрыть этот Issue.`,
+              labels: ['legal-audit']
+            });
